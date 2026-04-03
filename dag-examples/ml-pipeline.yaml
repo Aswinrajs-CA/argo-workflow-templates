@@ -1,0 +1,124 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: ml-pipeline-
+  namespace: argo
+spec:
+  entrypoint: ml-dag
+  templates:
+    - name: ml-dag
+      dag:
+        tasks:
+          - name: ingest-data
+            template: ingest
+            arguments:
+              parameters:
+                - name: dataset
+                  value: "iris"
+
+          - name: feature-engineering
+            template: features
+            dependencies: [ingest-data]
+            arguments:
+              parameters:
+                - name: dataset
+                  value: "{{tasks.ingest-data.outputs.parameters.dataset-path}}"
+
+          - name: train-model-a
+            template: train
+            dependencies: [feature-engineering]
+            arguments:
+              parameters:
+                - name: model-type
+                  value: "random-forest"
+
+          - name: train-model-b
+            template: train
+            dependencies: [feature-engineering]
+            arguments:
+              parameters:
+                - name: model-type
+                  value: "gradient-boosting"
+
+          - name: evaluate-a
+            template: evaluate
+            dependencies: [train-model-a]
+            arguments:
+              parameters:
+                - name: model
+                  value: "random-forest"
+
+          - name: evaluate-b
+            template: evaluate
+            dependencies: [train-model-b]
+            arguments:
+              parameters:
+                - name: model
+                  value: "gradient-boosting"
+
+          - name: select-best
+            template: select
+            dependencies: [evaluate-a, evaluate-b]
+
+    - name: ingest
+      inputs:
+        parameters:
+          - name: dataset
+      outputs:
+        parameters:
+          - name: dataset-path
+            valueFrom:
+              path: /tmp/dataset-path.txt
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          dataset = "{{inputs.parameters.dataset}}"
+          path = f"/tmp/{dataset}.csv"
+          with open("/tmp/dataset-path.txt", "w") as f:
+              f.write(path)
+          print(f"Ingested dataset: {dataset} -> {path}")
+
+    - name: features
+      inputs:
+        parameters:
+          - name: dataset
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          print(f"Running feature engineering on: {{inputs.parameters.dataset}}")
+
+    - name: train
+      inputs:
+        parameters:
+          - name: model-type
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          import random
+          model = "{{inputs.parameters.model-type}}"
+          accuracy = round(random.uniform(0.85, 0.99), 4)
+          print(f"Training model: {model} | Accuracy: {accuracy}")
+
+    - name: evaluate
+      inputs:
+        parameters:
+          - name: model
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          import random
+          model = "{{inputs.parameters.model}}"
+          score = round(random.uniform(0.80, 0.98), 4)
+          print(f"Evaluating model: {model} | Score: {score}")
+
+    - name: select
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          print("Comparing models and selecting the best...")
+          print("Best model selected. Ready for deployment.")

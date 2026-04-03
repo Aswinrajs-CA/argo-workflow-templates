@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: data-processing
+  namespace: argo
+  labels:
+    app: argo-templates
+    category: data
+spec:
+  templates:
+    - name: transform-data
+      inputs:
+        parameters:
+          - name: input-data
+          - name: output-format
+            default: "json"
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          import json, sys
+          input_data = '''{{inputs.parameters.input-data}}'''
+          output_format = '{{inputs.parameters.output-format}}'
+          try:
+              data = json.loads(input_data)
+              result = {
+                  "status": "success",
+                  "records": len(data) if isinstance(data, list) else 1,
+                  "format": output_format,
+                  "data": data
+              }
+              print(json.dumps(result, indent=2))
+          except Exception as e:
+              print(json.dumps({"status": "error", "message": str(e)}))
+              sys.exit(1)
+
+    - name: validate-data
+      inputs:
+        parameters:
+          - name: schema
+          - name: data
+      script:
+        image: python:3.11-slim
+        command: [python]
+        source: |
+          import json
+          schema = json.loads('{{inputs.parameters.schema}}')
+          data = json.loads('{{inputs.parameters.data}}')
+          required_fields = schema.get("required", [])
+          missing = [f for f in required_fields if f not in data]
+          if missing:
+              print(f"Validation FAILED. Missing fields: {missing}")
+              exit(1)
+          else:
+              print("Validation PASSED.")
+
+    - name: download-file
+      inputs:
+        parameters:
+          - name: url
+          - name: filename
+            default: "output.txt"
+      container:
+        image: curlimages/curl:latest
+        command: [sh, -c]
+        args:
+          - |
+            curl -L -o /tmp/{{inputs.parameters.filename}} {{inputs.parameters.url}}
+            echo "Downloaded: {{inputs.parameters.filename}}"

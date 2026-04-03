@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: etl-pipeline-
+  namespace: argo
+spec:
+  entrypoint: etl-main
+  arguments:
+    parameters:
+      - name: source-url
+        value: "https://example.com/data.json"
+      - name: schema
+        value: '{"required": ["id", "name"]}'
+
+  templates:
+    - name: etl-main
+      steps:
+        - - name: extract
+            templateRef:
+              name: data-processing
+              template: download-file
+            arguments:
+              parameters:
+                - name: url
+                  value: "{{workflow.parameters.source-url}}"
+                - name: filename
+                  value: "raw-data.json"
+
+        - - name: validate
+            templateRef:
+              name: data-processing
+              template: validate-data
+            arguments:
+              parameters:
+                - name: schema
+                  value: "{{workflow.parameters.schema}}"
+                - name: data
+                  value: '{"id": 1, "name": "test"}'
+
+          - name: transform
+            templateRef:
+              name: data-processing
+              template: transform-data
+            arguments:
+              parameters:
+                - name: input-data
+                  value: '[{"id": 1, "name": "record1"}]'
+
+        - - name: complete
+            templateRef:
+              name: notification
+              template: log-result
+            arguments:
+              parameters:
+                - name: status
+                  value: "COMPLETE"
+                - name: workflow-name
+                  value: "etl-pipeline"

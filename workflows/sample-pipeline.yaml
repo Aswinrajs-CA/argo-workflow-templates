@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: sample-pipeline-
+  namespace: argo
+spec:
+  entrypoint: main
+  arguments:
+    parameters:
+      - name: user-name
+        value: "Argo User"
+
+  templates:
+    - name: main
+      steps:
+        - - name: greet
+            templateRef:
+              name: hello-world
+              template: say-hello
+            arguments:
+              parameters:
+                - name: message
+                  value: "Starting pipeline for {{workflow.parameters.user-name}}"
+
+        - - name: process
+            templateRef:
+              name: data-processing
+              template: transform-data
+            arguments:
+              parameters:
+                - name: input-data
+                  value: '[{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]'
+                - name: output-format
+                  value: "json"
+
+        - - name: notify
+            templateRef:
+              name: notification
+              template: log-result
+            arguments:
+              parameters:
+                - name: status
+                  value: "SUCCESS"
+                - name: workflow-name
+                  value: "sample-pipeline"
+                - name: details
+                  value: "Pipeline completed for {{workflow.parameters.user-name}}"

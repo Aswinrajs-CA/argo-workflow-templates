@@ -1,0 +1,47 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hello-world
+  namespace: argo
+  labels:
+    app: argo-templates
+    category: basic
+spec:
+  templates:
+    - name: say-hello
+      inputs:
+        parameters:
+          - name: message
+            default: "Hello, World!"
+      container:
+        image: alpine:3.18
+        command: [echo]
+        args: ["{{inputs.parameters.message}}"]
+
+    - name: whalesay
+      inputs:
+        parameters:
+          - name: message
+            default: "Hello from Argo!"
+      container:
+        image: docker/whalesay:latest
+        command: [cowsay]
+        args: ["{{inputs.parameters.message}}"]
+
+    - name: hello-sequence
+      inputs:
+        parameters:
+          - name: name
+      steps:
+        - - name: greet
+            template: say-hello
+            arguments:
+              parameters:
+                - name: message
+                  value: "Hello, {{inputs.parameters.name}}!"
+        - - name: farewell
+            template: say-hello
+            arguments:
+              parameters:
+                - name: message
+                  value: "Goodbye, {{inputs.parameters.name}}!"
