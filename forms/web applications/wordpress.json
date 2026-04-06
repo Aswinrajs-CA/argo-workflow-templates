@@ -1,0 +1,95 @@
+{
+  "fields": [
+    {
+      "name": "site_name",
+      "label": "Site Name",
+      "type": "text",
+      "mappedTo": "site-name",
+      "defaultValue": "my-wordpress",
+      "helpText": "Name for the WordPress site (used in URL and metadata)",
+      "required": true
+    },
+    {
+      "name": "admin_email",
+      "label": "Admin Email",
+      "type": "text",
+      "mappedTo": "admin-email",
+      "defaultValue": "",
+      "helpText": "Email address for the WordPress admin account",
+      "required": true
+    },
+    {
+      "name": "admin_password",
+      "label": "Admin Password",
+      "type": "password",
+      "mappedTo": "admin-password",
+      "defaultValue": "",
+      "helpText": "Password for the WordPress admin account",
+      "required": true
+    },
+    {
+      "name": "storage_size",
+      "label": "Storage Size (Gi)",
+      "type": "select",
+      "mappedTo": "storage-size",
+      "defaultValue": "10",
+      "helpText": "Persistent storage size for WordPress content",
+      "required": true,
+      "options": [
+        "5",
+        "10",
+        "20",
+        "50"
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "name": "Storage Class",
+      "mappedTo": "storage-class",
+      "value": "default",
+      "secure": false
+    },
+    {
+      "name": "Container Registry",
+      "mappedTo": "container-registry",
+      "value": "registry.hybr.cloud:5000",
+      "secure": false
+    }
+  ],
+  "implicitParameters": [
+    "tenantSubscriptionId",
+    "tenantNamespace",
+    "targetClusterId",
+    "connectionId",
+    "submittedBy",
+    "submittedAt"
+  ],
+  "outputs": [
+    {
+      "name": "wordpress-url",
+      "label": "WordPress URL",
+      "source": "workflow.outputs.parameters.wordpress-url"
+    },
+    {
+      "name": "admin-url",
+      "label": "WordPress Admin URL",
+      "source": "workflow.outputs.parameters.admin-url"
+    }
+  ],
+  "id": "form-wordpress",
+  "name": "WordPress Site",
+  "description": "Deploy a production-ready WordPress site with MySQL backend and optional ingress configuration.",
+  "category": "Web Applications",
+  "icon": "fa-wordpress",
+  "executionContext": "TenantCluster",
+  "artifact": {
+    "type": "ArgoWorkflow",
+    "gitConnectionId": 17,
+    "gitBranch": "main",
+    "artifactPath": "samples/wordpress/workflows/deploy-wordpress.yaml",
+    "libraryPath": "samples/wordpress",
+    "executionEngine": "ArgoWorkflows",
+    "executionNamespace": "argo"
+  }
+}
