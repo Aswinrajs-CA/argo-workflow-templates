@@ -1,0 +1,135 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: deploy-wordpress-
+spec:
+  entrypoint: deploy-wordpress
+  arguments:
+    parameters:
+      - name: site-name
+        value: "my-wordpress"
+      - name: admin-email
+      - name: admin-password
+      - name: storage-size
+        value: "10"
+      - name: storage-class
+        value: "default"
+      - name: container-registry
+        value: "registry.hybr.cloud:5000"
+      - name: tenantSubscriptionId
+      - name: tenantNamespace
+      - name: targetClusterId
+      - name: connectionId
+      - name: submittedBy
+      - name: submittedAt
+  templates:
+    - name: deploy-wordpress
+      dag:
+        tasks:
+          - name: deploy-mysql
+            template: terraform-apply
+            arguments:
+              parameters:
+                - name: module-path
+                  value: "terraform"
+                - name: target
+                  value: "mysql"
+                - name: vars
+                  value: |
+                    namespace={{workflow.parameters.tenantNamespace}}
+                    site_name={{workflow.parameters.site-name}}
+                    storage_class={{workflow.parameters.storage-class}}
+                    storage_size={{workflow.parameters.storage-size}}
+                    admin_password={{workflow.parameters.admin-password}}
+          - name: deploy-wordpress
+            dependencies: [deploy-mysql]
+            template: terraform-apply
+            arguments:
+              parameters:
+                - name: module-path
+                  value: "terraform"
+                - name: target
+                  value: "wordpress"
+                - name: vars
+                  value: |
+                    namespace={{workflow.parameters.tenantNamespace}}
+                    site_name={{workflow.parameters.site-name}}
+                    admin_email={{workflow.parameters.admin-email}}
+                    admin_password={{workflow.parameters.admin-password}}
+                    storage_class={{workflow.parameters.storage-class}}
+                    storage_size={{workflow.parameters.storage-size}}
+                    container_registry={{workflow.parameters.container-registry}}
+                    mysql_host={{tasks.deploy-mysql.outputs.parameters.mysql-host}}
+          - name: configure-ingress
+            dependencies: [deploy-wordpress]
+            template: configure-ingress
+            arguments:
+              parameters:
+                - name: namespace
+                  value: "{{workflow.parameters.tenantNamespace}}"
+                - name: site-name
+                  value: "{{workflow.parameters.site-name}}"
+                - name: wordpress-host
+                  value: "{{tasks.deploy-wordpress.outputs.parameters.wordpress-host}}"
+                - name: wordpress-port
+                  value: "{{tasks.deploy-wordpress.outputs.parameters.wordpress-port}}"
+
+    - name: terraform-apply
+      inputs:
+        parameters:
+          - name: module-path
+          - name: target
+          - name: vars
+      outputs:
+        parameters:
+          - name: mysql-host
+            valueFrom:
+              path: /tmp/outputs/mysql-host
+            globalName: mysql-host
+          - name: wordpress-host
+            valueFrom:
+              path: /tmp/outputs/wordpress-host
+            globalName: wordpress-host
+          - name: wordpress-port
+            valueFrom:
+              path: /tmp/outputs/wordpress-port
+            globalName: wordpress-port
+      container:
+        image: hashicorp/terraform:1.7
+        command: [sh, -c]
+        args:
+          - |
+            cd /workspace/{{inputs.parameters.module-path}}
+            echo '{{inputs.parameters.vars}}' > terraform.tfvars
+            terraform init
+            terraform apply -auto-approve -target=module.{{inputs.parameters.target}}
+            mkdir -p /tmp/outputs
+            terraform output -raw mysql_host > /tmp/outputs/mysql-host 2>/dev/null || true
+            terraform output -raw wordpress_host > /tmp/outputs/wordpress-host 2>/dev/null || true
+            terraform output -raw wordpress_port > /tmp/outputs/wordpress-port 2>/dev/null || true
+
+    - name: configure-ingress
+      inputs:
+        parameters:
+          - name: namespace
+          - name: site-name
+          - name: wordpress-host
+          - name: wordpress-port
+      outputs:
+        parameters:
+          - name: wordpress-url
+            valueFrom:
+              path: /tmp/outputs/wordpress-url
+          - name: admin-url
+            valueFrom:
+              path: /tmp/outputs/admin-url
+      container:
+        image: alpine:3.18
+        command: [sh, -c]
+        args:
+          - |
+            mkdir -p /tmp/outputs
+            echo "http://{{inputs.parameters.wordpress-host}}:{{inputs.parameters.wordpress-port}}" > /tmp/outputs/wordpress-url
+            echo "http://{{inputs.parameters.wordpress-host}}:{{inputs.parameters.wordpress-port}}/wp-admin" > /tmp/outputs/admin-url
+            echo "WordPress URL: $(cat /tmp/outputs/wordpress-url)"
+            echo "Admin URL: $(cat /tmp/outputs/admin-url)"
